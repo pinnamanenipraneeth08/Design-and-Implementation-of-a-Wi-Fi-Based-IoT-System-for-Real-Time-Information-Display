@@ -1,0 +1,2 @@
+# Design-and-Implementation-of-a-Wi-Fi-Based-IoT-System-for-Real-Time-Information-Display
+The Design and Implementation of a Wi-Fi-Based IoT System for Real-Time Information Display uses an ESP8266 Wi-Fi module to transmit real-time data to a 16x2 LCD display. It ensures efficient wireless communication for monitoring and display purposes, with added security measures to prevent unauthorized access and safeguard transmitted data.
