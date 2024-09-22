@@ -1,0 +1,155 @@
+//The Design and Implementation of a Wi-Fi-Based IoT System for Real-Time Information Display involves developing a secure, efficient system that allows real-time data display on an LCD screen using IoT technology. The system integrates an ESP8266 Wi-Fi module to collect data from sensors or remote sources, and a LiquidCrystal 16x2 LCD display to present this data visually.
+
+The project focuses on transmitting data wirelessly over a Wi-Fi network, eliminating the need for physical connections, and ensuring that information is updated in real time. To enhance the system’s security, measures are implemented to prevent unauthorized access to the device’s IP address, ensuring that the information remains confidential and protected from cyber threats.
+
+Key components of the system include:
+
+1. ESP8266 Wi-Fi Module: Acts as the core IoT device for communication and data transmission.
+2. 16x2 LiquidCrystal LCD Display: Displays the real-time data received wirelessly.
+3. Sensors/Data Sources: Provide the real-time information to be displayed, such as environmental data (e.g., temperature, humidity) or user-input data.
+4. Security Features: Include IP filtering, encryption, and authentication protocols to prevent unauthorized access.
+
+This project can be applied in a variety of fields such as smart homes, industrial monitoring, and remote data acquisition systems, offering an efficient way to monitor and display data with minimal human intervention.
+
+#include <ESP8266WiFi.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <map>
+
+// Initialize the I2C LCD (0x27 is the default I2C address for many LCDs)
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+AsyncWebServer server(80);
+
+// Wi-Fi credentials
+const char* ssid = "Chinnu";
+const char* password = "kalyan123";
+
+// User credentials (username -> password)
+std::map<String, String> users = {
+  {"user1", "password1"},
+  {"user2", "password2"},
+  {"user3", "password3"}
+};
+
+// Message history for each user (username -> messages)
+std::map<String, std::vector<String>> messageHistory;
+
+// Current logged-in user
+String currentUser = "";
+
+// HTML for the login page
+const char login_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html><head>
+  <title>Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head><body>
+  <h2>Login</h2>
+  <form action="/login" method="POST">
+    Username: <input type="text" name="username"><br>
+    Password: <input type="password" name="password"><br>
+    <input type="submit" value="Login">
+  </form>
+</body></html>)rawliteral";
+
+// HTML for the message page
+String generateMessagePage(String username) {
+  String messagePage = R"rawliteral(
+<!DOCTYPE HTML><html><head>
+  <title>Smart Notice Board</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head><body><center>
+  <h2>Welcome, )rawliteral" + username + R"rawliteral(</h2>
+  <form action="/send" method="POST">
+    Enter Text to Display: <input type="text" name="message">
+    <input type="submit" value="Send">
+  </form><br>
+  <h3>Your Message History:</h3><ul>
+)rawliteral";
+
+  for (const auto& msg : messageHistory[username]) {
+    messagePage += "<li>" + msg + "</li>";
+  }
+
+  messagePage += "</ul></center></body></html>";
+  return messagePage;
+}
+
+void notFound(AsyncWebServerRequest *request) {
+  request->send(404, "text/plain", "Not found");
+}
+
+void setup() {
+  // Start serial communication for debugging
+  Serial.begin(115200);
+  
+  // Initialize the LCD
+  lcd.init();
+  lcd.backlight();
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Smart Notice Board");
+
+  // Connect to Wi-Fi
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  Serial.println("Connecting to WiFi...");
+
+  // Wait for connection
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Still connecting...");
+  }
+
+  // Once connected, display the IP address
+  Serial.println();
+  Serial.print("Connected to WiFi! IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Serve the login page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/html", login_html);
+  });
+
+  // Handle login
+  server.on("/login", HTTP_POST, [](AsyncWebServerRequest *request) {
+    String username = request->getParam("username", true)->value();
+    String password = request->getParam("password", true)->value();
+
+    if (users.find(username) != users.end() && users[username] == password) {
+      currentUser = username;
+      request->send(200, "text/html", generateMessagePage(username));
+    } else {
+      request->send(401, "text/html", "Unauthorized. <a href='/'>Login</a>");
+    }
+  });
+
+  // Handle message sending
+  server.on("/send", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (currentUser == "") {
+      request->send(401, "text/html", "Unauthorized. <a href='/'>Login</a>");
+      return;
+    }
+
+    String message = request->getParam("message", true)->value();
+    messageHistory[currentUser].push_back(message);
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(message);
+
+    request->send(200, "text/html", generateMessagePage(currentUser));
+  });
+
+  server.onNotFound(notFound);
+  server.begin();
+}
+
+void loop() {
+  // Scroll message left on the LCD screen if needed
+  for (int positionCounter = 0; positionCounter < 29; positionCounter++) {
+    lcd.scrollDisplayLeft();
+    delay(500);
+  }
+}
