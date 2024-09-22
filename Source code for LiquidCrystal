@@ -1,0 +1,131 @@
+//The Design and Implementation of a Wi-Fi-Based IoT System for Real-Time Information Display uses an ESP8266 Wi-Fi module to transmit real-time data to a 16x2 LCD display. It ensures efficient wireless communication for monitoring and display purposes, with added security measures to prevent unauthorized access and safeguard transmitted data.//
+
+#include <ESP8266WiFi.h>
+#include <ESPAsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <LiquidCrystal.h>
+#include <map>
+
+LiquidCrystal lcd(D0, D1, D2, D3, D4, D5);
+AsyncWebServer server(80);
+
+// Wi-Fi credentials
+const char* ssid = "USER_ID"; //CHANGE USER_ID
+const char* password = "PASSWORD"; // CHANGE PASSWORD
+
+// User credentials (username -> password)
+std::map<String, String> users = {
+  {"user1", "password1"},
+  {"user2", "password2"},
+  {"user3", "password3"}
+};
+
+// Message history for each user (username -> messages)
+std::map<String, std::vector<String>> messageHistory;
+
+// Current logged-in user
+String currentUser = "";
+
+// HTML for the login page
+const char login_html[] PROGMEM = R"rawliteral(
+<!DOCTYPE HTML><html><head>
+  <title>Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head><body>
+  <h2>Login</h2>
+  <form action="/login" method="POST">
+    Username: <input type="text" name="username"><br>
+    Password: <input type="password" name="password"><br>
+    <input type="submit" value="Login">
+  </form>
+</body></html>)rawliteral";
+
+// HTML for the message page
+String generateMessagePage(String username) {
+  String messagePage = R"rawliteral(
+<!DOCTYPE HTML><html><head>
+  <title>Smart Notice Board</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head><body><center>
+  <h2>Welcome, )rawliteral" + username + R"rawliteral(</h2>
+  <form action="/send" method="POST">
+    Enter Text to Display: <input type="text" name="message">
+    <input type="submit" value="Send">
+  </form><br>
+  <h3>Your Message History:</h3><ul>
+)rawliteral";
+
+  for (const auto& msg : messageHistory[username]) {
+    messagePage += "<li>" + msg + "</li>";
+  }
+
+  messagePage += "</ul></center></body></html>";
+  return messagePage;
+}
+
+void notFound(AsyncWebServerRequest *request) {
+  request->send(404, "text/plain", "Not found");
+}
+
+void setup() {
+  Serial.begin(115200);
+  lcd.begin(16, 2);
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print("Smart Notice Board");
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(ssid, password);
+  if (WiFi.waitForConnectResult() != WL_CONNECTED) {
+    Serial.println("WiFi Failed!");
+    return;
+  }
+  Serial.println();
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Serve the login page
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    request->send_P(200, "text/html", login_html);
+  });
+
+  // Handle login
+  server.on("/login", HTTP_POST, [](AsyncWebServerRequest *request) {
+    String username = request->getParam("username", true)->value();
+    String password = request->getParam("password", true)->value();
+
+    if (users.find(username) != users.end() && users[username] == password) {
+      currentUser = username;
+      request->send(200, "text/html", generateMessagePage(username));
+    } else {
+      request->send(401, "text/html", "Unauthorized. <a href='/'>Login</a>");
+    }
+  });
+
+  // Handle message sending
+  server.on("/send", HTTP_POST, [](AsyncWebServerRequest *request) {
+    if (currentUser == "") {
+      request->send(401, "text/html", "Unauthorized. <a href='/'>Login</a>");
+      return;
+    }
+
+    String message = request->getParam("message", true)->value();
+    messageHistory[currentUser].push_back(message);
+
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(message);
+
+    request->send(200, "text/html", generateMessagePage(currentUser));
+  });
+
+  server.onNotFound(notFound);
+  server.begin();
+}
+
+void loop() {
+  for (int positionCounter = 0; positionCounter < 29; positionCounter++) {
+    lcd.scrollDisplayLeft();
+    delay(500);
+  }
+}
