@@ -23,8 +23,8 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 AsyncWebServer server(80);
 
 // Wi-Fi credentials
-const char* ssid = "Chinnu";
-const char* password = "kalyan123";
+const char* ssid = "USER_ID"; // CHANGE THE USER ID
+const char* password = "PASSWORD"; // CHANGE THE PASSWORD
 
 // User credentials (username -> password)
 std::map<String, String> users = {
